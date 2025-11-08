@@ -1,0 +1,821 @@
+import React, { useState, useEffect } from 'react';
+import { Home, Bed, Calendar, Users, FileText, Plus, Search, Edit2, Trash2, X, Filter, TrendingUp, DollarSign, Clock } from 'lucide-react';
+
+// Initialize localStorage with sample data if empty
+const initializeStorage = () => {
+  if (!localStorage.getItem('rooms')) {
+    const sampleRooms = [
+      { id: 1, name: 'Deluxe #101', type: 'Deluxe', price: 3500, status: 'Available' },
+      { id: 2, name: 'Suite #201', type: 'Suite', price: 8500, status: 'Booked' },
+      { id: 3, name: 'Deluxe #102', type: 'Deluxe', price: 3500, status: 'Available' },
+      { id: 4, name: 'Royal Suite #301', type: 'Royal Suite', price: 12000, status: 'Available' },
+    ];
+    localStorage.setItem('rooms', JSON.stringify(sampleRooms));
+  }
+
+  if (!localStorage.getItem('bookings')) {
+    const sampleBookings = [
+      { id: 1, guest: 'Rahul Sharma', guestPhone: '9876543210', guestEmail: 'rahul@email.com', room: 'Suite #201', roomId: 2, checkin: '2025-11-09', checkout: '2025-11-12', status: 'Confirmed', amount: 25500 },
+      { id: 2, guest: 'Priya Patel', guestPhone: '9876543211', guestEmail: 'priya@email.com', room: 'Deluxe #101', roomId: 1, checkin: '2025-11-10', checkout: '2025-11-11', status: 'Pending', amount: 3500 },
+    ];
+    localStorage.setItem('bookings', JSON.stringify(sampleBookings));
+  }
+
+  if (!localStorage.getItem('guests')) {
+    const sampleGuests = [
+      { id: 1, name: 'Rahul Sharma', phone: '9876543210', email: 'rahul@email.com', lastStay: '2025-11-09' },
+      { id: 2, name: 'Priya Patel', phone: '9876543211', email: 'priya@email.com', lastStay: '2025-11-10' },
+    ];
+    localStorage.setItem('guests', JSON.stringify(sampleGuests));
+  }
+};
+
+export default function HotelCMS() {
+  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [rooms, setRooms] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [guests, setGuests] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [editingItem, setEditingItem] = useState(null);
+
+  // Load data from localStorage
+  useEffect(() => {
+    initializeStorage();
+    loadData();
+  }, []);
+
+  const loadData = () => {
+    setRooms(JSON.parse(localStorage.getItem('rooms') || '[]'));
+    setBookings(JSON.parse(localStorage.getItem('bookings') || '[]'));
+    setGuests(JSON.parse(localStorage.getItem('guests') || '[]'));
+  };
+
+  // Calculate dashboard stats
+  const getDashboardStats = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const todayBookings = bookings.filter(b => b.checkin === today).length;
+    const totalRooms = rooms.length;
+    const bookedRooms = rooms.filter(r => r.status === 'Booked').length;
+    const occupancyRate = totalRooms > 0 ? Math.round((bookedRooms / totalRooms) * 100) : 0;
+    const totalRevenue = bookings.reduce((sum, b) => sum + (b.amount || 0), 0);
+    const pendingCheckins = bookings.filter(b => b.status === 'Pending').length;
+
+    return { todayBookings, occupancyRate, totalRevenue, pendingCheckins };
+  };
+
+  const stats = getDashboardStats();
+
+  // Modal handlers
+  const openModal = (type, item = null) => {
+    setModalType(type);
+    setEditingItem(item);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingItem(null);
+  };
+
+  // CRUD operations
+  const addRoom = (roomData) => {
+    const newRoom = { ...roomData, id: Date.now() };
+    const updatedRooms = [...rooms, newRoom];
+    setRooms(updatedRooms);
+    localStorage.setItem('rooms', JSON.stringify(updatedRooms));
+    closeModal();
+  };
+
+  const updateRoom = (roomData) => {
+    const updatedRooms = rooms.map(r => r.id === roomData.id ? roomData : r);
+    setRooms(updatedRooms);
+    localStorage.setItem('rooms', JSON.stringify(updatedRooms));
+    closeModal();
+  };
+
+  const deleteRoom = (id) => {
+    if (confirm('Are you sure you want to delete this room?')) {
+      const updatedRooms = rooms.filter(r => r.id !== id);
+      setRooms(updatedRooms);
+      localStorage.setItem('rooms', JSON.stringify(updatedRooms));
+    }
+  };
+
+  const addBooking = (bookingData) => {
+    const newBooking = { ...bookingData, id: Date.now() };
+    const updatedBookings = [...bookings, newBooking];
+    setBookings(updatedBookings);
+    localStorage.setItem('bookings', JSON.stringify(updatedBookings));
+    
+    // Update room status to Booked
+    const updatedRooms = rooms.map(r => 
+      r.id === parseInt(bookingData.roomId) ? { ...r, status: 'Booked' } : r
+    );
+    setRooms(updatedRooms);
+    localStorage.setItem('rooms', JSON.stringify(updatedRooms));
+    
+    // Add guest if new
+    const guestExists = guests.find(g => g.phone === bookingData.guestPhone);
+    if (!guestExists) {
+      const newGuest = {
+        id: Date.now(),
+        name: bookingData.guest,
+        phone: bookingData.guestPhone,
+        email: bookingData.guestEmail,
+        lastStay: bookingData.checkin
+      };
+      const updatedGuests = [...guests, newGuest];
+      setGuests(updatedGuests);
+      localStorage.setItem('guests', JSON.stringify(updatedGuests));
+    }
+    
+    closeModal();
+  };
+
+  const deleteBooking = (id) => {
+    if (confirm('Are you sure you want to delete this booking?')) {
+      const booking = bookings.find(b => b.id === id);
+      const updatedBookings = bookings.filter(b => b.id !== id);
+      setBookings(updatedBookings);
+      localStorage.setItem('bookings', JSON.stringify(updatedBookings));
+      
+      // Update room status back to Available
+      if (booking) {
+        const updatedRooms = rooms.map(r => 
+          r.id === booking.roomId ? { ...r, status: 'Available' } : r
+        );
+        setRooms(updatedRooms);
+        localStorage.setItem('rooms', JSON.stringify(updatedRooms));
+      }
+    }
+  };
+
+  const deleteGuest = (id) => {
+    if (confirm('Are you sure you want to delete this guest?')) {
+      const updatedGuests = guests.filter(g => g.id !== id);
+      setGuests(updatedGuests);
+      localStorage.setItem('guests', JSON.stringify(updatedGuests));
+    }
+  };
+
+  // Render Dashboard
+  const renderDashboard = () => (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold text-white mb-6">Dashboard</h1>
+      
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <Calendar className="text-blue-200" size={32} />
+            <span className="text-blue-200 text-sm">Today</span>
+          </div>
+          <div className="text-4xl font-bold text-white mb-2">{stats.todayBookings}</div>
+          <div className="text-blue-100 text-sm">Today's Bookings</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <TrendingUp className="text-purple-200" size={32} />
+            <span className="text-purple-200 text-sm">Rate</span>
+          </div>
+          <div className="text-4xl font-bold text-white mb-2">{stats.occupancyRate}%</div>
+          <div className="text-purple-100 text-sm">Occupancy Rate</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <DollarSign className="text-green-200" size={32} />
+            <span className="text-green-200 text-sm">Total</span>
+          </div>
+          <div className="text-4xl font-bold text-white mb-2">₹{stats.totalRevenue.toLocaleString()}</div>
+          <div className="text-green-100 text-sm">Revenue</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-orange-600 to-orange-700 rounded-2xl p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <Clock className="text-orange-200" size={32} />
+            <span className="text-orange-200 text-sm">Pending</span>
+          </div>
+          <div className="text-4xl font-bold text-white mb-2">{stats.pendingCheckins}</div>
+          <div className="text-orange-100 text-sm">Pending Check-ins</div>
+        </div>
+      </div>
+
+      {/* Weekly Occupancy Chart */}
+      <div className="bg-gray-800 rounded-2xl p-6 shadow-xl">
+        <h2 className="text-xl font-bold text-white mb-6">Weekly Occupancy</h2>
+        <div className="h-64 flex items-end justify-between gap-4">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
+            const heights = [30, 40, 35, 50, 75, 80, 90];
+            return (
+              <div key={day} className="flex-1 flex flex-col items-center">
+                <div className="w-full bg-blue-600 rounded-t-lg transition-all hover:bg-blue-500" 
+                     style={{ height: `${heights[i]}%` }}></div>
+                <span className="text-gray-400 text-sm mt-2">{day}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button
+          onClick={() => openModal('booking')}
+          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-6 flex items-center justify-center gap-3 transition shadow-lg"
+        >
+          <Plus size={24} />
+          <span className="font-semibold text-lg">Add Booking</span>
+        </button>
+        <button
+          onClick={() => openModal('room')}
+          className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl p-6 flex items-center justify-center gap-3 transition shadow-lg"
+        >
+          <Plus size={24} />
+          <span className="font-semibold text-lg">Add Room</span>
+        </button>
+        <button
+          onClick={() => setCurrentPage('invoice')}
+          className="bg-green-600 hover:bg-green-700 text-white rounded-xl p-6 flex items-center justify-center gap-3 transition shadow-lg"
+        >
+          <FileText size={24} />
+          <span className="font-semibold text-lg">Generate Invoice</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render Rooms Page
+  const renderRooms = () => {
+    const filteredRooms = rooms.filter(room => {
+      const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           room.type.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesFilter = filterStatus === 'All' || room.status === filterStatus;
+      return matchesSearch && matchesFilter;
+    });
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold text-white">Room Management</h1>
+          <button
+            onClick={() => openModal('room')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 transition shadow-lg"
+          >
+            <Plus size={20} />
+            Add Room
+          </button>
+        </div>
+
+        {/* Search and Filter */}
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search rooms..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            />
+          </div>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-6 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:border-blue-500"
+          >
+            <option>All</option>
+            <option>Available</option>
+            <option>Booked</option>
+          </select>
+        </div>
+
+        {/* Rooms Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredRooms.map(room => (
+            <div key={room.id} className="bg-gray-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-1">{room.name}</h3>
+                  <p className="text-gray-400 text-sm">{room.type}</p>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  room.status === 'Available' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {room.status}
+                </span>
+              </div>
+              <div className="text-2xl font-bold text-blue-400 mb-4">₹{room.price}/night</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => openModal('room', room)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition"
+                >
+                  <Edit2 size={16} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => deleteRoom(room.id)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition"
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Render Bookings Page
+  const renderBookings = () => {
+    const filteredBookings = bookings.filter(booking =>
+      booking.guest.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.room.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold text-white">Booking Calendar</h1>
+          <button
+            onClick={() => openModal('booking')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 transition shadow-lg"
+          >
+            <Plus size={20} />
+            Add Booking
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search bookings..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+
+        {/* Bookings Table */}
+        <div className="bg-gray-800 rounded-xl overflow-hidden shadow-xl">
+          <table className="w-full">
+            <thead className="bg-gray-900">
+              <tr>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Guest Name</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Room</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Check-in</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Check-out</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Amount</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBookings.map(booking => (
+                <tr key={booking.id} className="border-t border-gray-700 hover:bg-gray-750 transition">
+                  <td className="px-6 py-4 text-white">{booking.guest}</td>
+                  <td className="px-6 py-4 text-gray-300">{booking.room}</td>
+                  <td className="px-6 py-4 text-gray-300">{new Date(booking.checkin).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-gray-300">{new Date(booking.checkout).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-green-400 font-semibold">₹{booking.amount}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      booking.status === 'Confirmed' ? 'bg-green-500/20 text-green-400' :
+                      booking.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {booking.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => deleteBooking(booking.id)}
+                      className="text-red-400 hover:text-red-300 transition"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Guests Page
+  const renderGuests = () => {
+    const filteredGuests = guests.filter(guest =>
+      guest.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      guest.phone.includes(searchTerm)
+    );
+
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-white">Guest Management</h1>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search by name or phone..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+
+        {/* Guests Table */}
+        <div className="bg-gray-800 rounded-xl overflow-hidden shadow-xl">
+          <table className="w-full">
+            <thead className="bg-gray-900">
+              <tr>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Name</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Phone</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Email</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Last Stay</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredGuests.map(guest => (
+                <tr key={guest.id} className="border-t border-gray-700 hover:bg-gray-750 transition">
+                  <td className="px-6 py-4 text-white font-medium">{guest.name}</td>
+                  <td className="px-6 py-4 text-gray-300">{guest.phone}</td>
+                  <td className="px-6 py-4 text-gray-300">{guest.email}</td>
+                  <td className="px-6 py-4 text-gray-300">{new Date(guest.lastStay).toLocaleDateString()}</td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => deleteGuest(guest.id)}
+                      className="text-red-400 hover:text-red-300 transition"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Invoice Generator
+  const renderInvoice = () => (
+    <div className="bg-gray-800 rounded-xl p-8 shadow-xl">
+      <h1 className="text-3xl font-bold text-white mb-6">Generate Invoice</h1>
+      <div className="text-center py-12">
+        <FileText size={64} className="mx-auto text-gray-600 mb-4" />
+        <p className="text-gray-400 mb-6">Invoice generation integrated with your billing system</p>
+        <button
+          onClick={() => window.open('about:blank')}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl transition"
+        >
+          Open Billing System
+        </button>
+      </div>
+    </div>
+  );
+
+  // Modal Component
+  const renderModal = () => {
+    if (!showModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-white">
+              {editingItem ? 'Edit' : 'Add'} {modalType === 'room' ? 'Room' : 'Booking'}
+            </h2>
+            <button onClick={closeModal} className="text-gray-400 hover:text-white">
+              <X size={24} />
+            </button>
+          </div>
+
+          {modalType === 'room' ? (
+            <RoomForm 
+              room={editingItem} 
+              onSubmit={editingItem ? updateRoom : addRoom}
+              onCancel={closeModal}
+            />
+          ) : (
+            <BookingForm 
+              rooms={rooms.filter(r => r.status === 'Available')}
+              onSubmit={addBooking}
+              onCancel={closeModal}
+            />
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex">
+      {/* Sidebar */}
+      <div className="w-64 bg-black p-6 flex flex-col">
+        <h1 className="text-2xl font-bold text-white mb-8">Hotel Grand Sita</h1>
+        
+        <nav className="flex-1 space-y-2">
+          {[
+            { id: 'dashboard', icon: Home, label: 'Dashboard' },
+            { id: 'rooms', icon: Bed, label: 'Rooms' },
+            { id: 'bookings', icon: Calendar, label: 'Bookings' },
+            { id: 'guests', icon: Users, label: 'Guests' },
+            { id: 'invoice', icon: FileText, label: 'Invoice' },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => { setCurrentPage(item.id); setSearchTerm(''); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${
+                currentPage === item.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <item.icon size={20} />
+              <span className="font-medium">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 p-8 overflow-auto">
+        {currentPage === 'dashboard' && renderDashboard()}
+        {currentPage === 'rooms' && renderRooms()}
+        {currentPage === 'bookings' && renderBookings()}
+        {currentPage === 'guests' && renderGuests()}
+        {currentPage === 'invoice' && renderInvoice()}
+      </div>
+
+      {renderModal()}
+    </div>
+  );
+}
+
+// Room Form Component
+function RoomForm({ room, onSubmit, onCancel }) {
+  const [formData, setFormData] = useState(room || {
+    name: '',
+    type: 'Deluxe',
+    price: '',
+    status: 'Available'
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit({ ...formData, price: parseFloat(formData.price) });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Room Name/Number</label>
+        <input
+          type="text"
+          required
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Room Type</label>
+        <select
+          value={formData.type}
+          onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500"
+        >
+          <option>Deluxe</option>
+          <option>Super Deluxe</option>
+          <option>Suite</option>
+          <option>Royal Suite</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Price per Night</label>
+        <input
+          type="number"
+          required
+          min="0"
+          value={formData.price}
+          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+        <select
+          value={formData.status}
+          onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500"
+        >
+          <option>Available</option>
+          <option>Booked</option>
+        </select>
+      </div>
+
+      <div className="flex gap-3 pt-4">
+        <button
+          type="submit"
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition"
+        >
+          {room ? 'Update' : 'Add'} Room
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-semibold transition"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// Booking Form Component
+function BookingForm({ rooms, onSubmit, onCancel }) {
+  const [formData, setFormData] = useState({
+    guest: '',
+    guestPhone: '',
+    guestEmail: '',
+    roomId: '',
+    room: '',
+    checkin: '',
+    checkout: '',
+    status: 'Confirmed',
+    amount: 0
+  });
+
+  const handleRoomChange = (e) => {
+    const selectedRoom = rooms.find(r => r.id === parseInt(e.target.value));
+    if (selectedRoom) {
+      setFormData({
+        ...formData,
+        roomId: selectedRoom.id,
+        room: selectedRoom.name,
+        amount: calculateAmount(formData.checkin, formData.checkout, selectedRoom.price)
+      });
+    }
+  };
+
+  const calculateAmount = (checkin, checkout, price) => {
+    if (!checkin || !checkout || !price) return 0;
+    const days = Math.ceil((new Date(checkout) - new Date(checkin)) / (1000 * 60 * 60 * 24));
+    return days > 0 ? days * price : 0;
+  };
+
+  const handleDateChange = (field, value) => {
+    const selectedRoom = rooms.find(r => r.id === parseInt(formData.roomId));
+    const newFormData = { ...formData, [field]: value };
+    if (selectedRoom) {
+      newFormData.amount = calculateAmount(
+        field === 'checkin' ? value : formData.checkin,
+        field === 'checkout' ? value : formData.checkout,
+        selectedRoom.price
+      );
+    }
+    setFormData(newFormData);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.roomId) {
+      alert('Please select a room');
+      return;
+    }
+    onSubmit(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Guest Name</label>
+        <input
+          type="text"
+          required
+          value={formData.guest}
+          onChange={(e) => setFormData({ ...formData, guest: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
+        <input
+          type="tel"
+          required
+          value={formData.guestPhone}
+          onChange={(e) => setFormData({ ...formData, guestPhone: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+        <input
+          type="email"
+          required
+          value={formData.guestEmail}
+          onChange={(e) => setFormData({ ...formData, guestEmail: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Select Room</label>
+        <select
+          required
+          value={formData.roomId}
+          onChange={handleRoomChange}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500"
+        >
+          <option value="">Choose a room...</option>
+          {rooms.map(room => (
+            <option key={room.id} value={room.id}>
+              {room.name} - {room.type} (₹{room.price}/night)
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Check-in Date</label>
+          <input
+            type="date"
+            required
+            value={formData.checkin}
+            onChange={(e) => handleDateChange('checkin', e.target.value)}
+            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Check-out Date</label>
+          <input
+            type="date"
+            required
+            value={formData.checkout}
+            onChange={(e) => handleDateChange('checkout', e.target.value)}
+            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+        <select
+          value={formData.status}
+          onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-blue-500"
+        >
+          <option>Confirmed</option>
+          <option>Pending</option>
+          <option>Cancelled</option>
+        </select>
+      </div>
+
+      {formData.amount > 0 && (
+        <div className="bg-blue-600/20 border border-blue-500/30 rounded-xl p-4">
+          <div className="text-sm text-blue-300 mb-1">Total Amount</div>
+          <div className="text-3xl font-bold text-blue-400">₹{formData.amount.toLocaleString()}</div>
+        </div>
+      )}
+
+      <div className="flex gap-3 pt-4">
+        <button
+          type="submit"
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition"
+        >
+          Add Booking
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-semibold transition"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
